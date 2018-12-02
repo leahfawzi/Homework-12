@@ -1,0 +1,132 @@
+---
+title: "Homework12"
+author: "Larine Hamied"
+date: "12/2/2018"
+---
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(httr)
+library(lubridate)
+library(base64enc)
+
+newsAPI <- "apiKey=02f3b9bf72be490ca99636ca0921db7e"
+googleCloudAPI <- "AIzaSyAy_zmaU5tKjkq-ApMUY6d7aDSq8FHGA4E"
+```
+I made my API Keys global variables above. 
+
+###For this exercise, I will use the Arabic financial newspaper, **ارقام**, which can be transliterated as *"Argaam"* or *"Arqaam"* (and translates to "numbers" in English). I received this API from the website newsapi.org
+
+Here is a **get_headlines_date_range** function, where the user must include the name of the source, a start date and end date (in any way (i.e. with a forward slash, hyphen, or no punctuation at all) so long as it is in the order year, month, day) that provides a range, and the API key, "newsAPI."
+
+```{r}
+get_headlines_date_range <- function(source, date1, date2, API_key){
+  base <- "https://newsapi.org/v2/everything?"
+  sources <- paste("sources=", source, sep="")
+  date1 <- paste("from=", ymd(as.character(date1)), sep="")
+  date2 <- paste("from=", ymd(as.character(date2)), sep="")
+  url <- paste(base, sources,"&", date1, "&", date2, "&",API_key, sep="")
+  x <- httr::GET(url=url)
+  x <- jsonlite::fromJSON(rawToChar(x$content))
+  articles <- x$articles
+  return(unlist(articles$title))
+}
+
+```
+
+Here is the function with the newspaper Argaam/Arqaam: 
+```{r}
+get_headlines_date_range("argaam","2018/11/30","20181202", newsAPI)
+```
+
+Here is the function with the newspaper Argaam/Arqaam (notice they are spelled differently - interestingly enough, the url would only work with Argaam above and Arqaam below). The keyword I used is **"الوقود"** or **fuel**, giving me headlines about fuel prices generally in the Middle East, and particularly news on the protests going on in France. 
+
+```{r}
+get_headlines_keyword <- function(source, keyword, API_key) {
+  base <- "https://newsapi.org/v2/everything?"
+  sources <- paste("sources=", source, sep="")
+  keyword <- paste("q=", keyword, sep="")
+  url <- paste(base, sources,"&", keyword, "&", API_key, sep="")
+  x <- httr::GET(url=url)
+  x <- jsonlite::fromJSON(rawToChar(x$content))
+  articles <- x$articles
+  return(unlist(articles$title))
+}
+```
+
+Here is a **get_headlines_keyword** function, where the user must include the name of the source, a keyword, and the API key, "newsAPI."
+```{r}
+get_headlines_keyword("arqaam","الوقود", newsAPI)
+```
+The user can store either of the functions above into an object. Let's do it below with the **get_headlines_keyword** function and store it into an object called **"headlines"** 
+```{r}
+headlines <- get_headlines_keyword("arqaam","الوقود", newsAPI)
+```
+
+Here is a **translate_arabic_headlines** function, where the user must pass through an object with whichever headlines they want to use, and an API key for Google Cloud (from above) to use Google Cloud's translate API. 
+
+```{r}
+translate_arabic_headlines <- function(headlines, API_key){
+  source <- "ar"
+  target <- "en"
+  nh <- length(headlines)
+  translated <- rep(NA, nh)
+  for (i in 1:nh){
+    text <- headlines[i]
+    body <- paste("{",
+                  "'q':'", text, "',", 
+                  "'source':'", source, "',",
+                  "'target':'", target, "',",
+                  "'format':'text',",  
+                  "}", sep="")  
+  
+  
+    base <- "https://translation.googleapis.com/language/translate/v2?key="
+    url <- paste(base, API_key, sep="")
+  
+    x <- httr::POST(url, body = body)
+    x <- jsonlite::fromJSON(rawToChar(x$content))
+    out <- x$data$translations$translatedText
+    translated[i] <- out
+  }
+  return(translated)
+}
+```
+
+Translating the headlines from above: 
+```{r}
+translate_arabic_headlines(headlines, googleCloudAPI)
+```
+
+Here is a **text_to_speech** function, where the user must pass through a specific headline, and an API key for Google Cloud (from above) to use the Google Cloud Text to Speech API. This will read out whatever is translated above in US English in a male's voice, and return an mp3 file. 
+
+```{r}
+text_to_speech <- function(text, API_key) {
+  
+  text <- translate_arabic_headlines(text,API_key)
+ 
+  text <- paste(text, collapse=" ")
+  text <- gsub("'", "", text)
+  
+  input <- paste("'input':{'text':'", text, "'}", sep="")
+  voice <- "'voice':{'languageCode':'en-US','name':'en-US-Standard-B','ssmlGender':'MALE'}"
+  output <- "'audioConfig':{'audioEncoding':'MP3'}"
+  
+  s_body <- paste("{", input, ",", voice, ",", output, "}", sep="")
+  
+  base_url <- "https://texttospeech.googleapis.com/v1/text:synthesize?key="
+  url <- paste(base_url, API_key, sep="")
+  
+  x <- httr::POST(url, body = s_body)
+  x <- jsonlite::fromJSON(rawToChar(x$content))
+  Sys.setenv(output_string=x$audioContent)
+  system("echo $output_string > sound_out.txt")
+  system("base64 --decode sound_out.txt > sound_out.mp3")
+  system("afplay sound_out.mp3")
+}
+```
+
+I arbitrarily picked the 8th headline because I was interested to hear if the Speech would pause accordingly with ellipsis (...). 
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+text_to_speech(headlines[8], googleCloudAPI)
+```
+
