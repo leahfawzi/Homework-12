@@ -1,0 +1,199 @@
+---
+title: "Daniel_Johnson_HW_12"
+author: "Daniel Johnson"
+date: "November 30, 2018"
+output: pdf_document
+---
+#API Search Functions
+Function to produce the base url with domain and a keyword to search by
+```{r}
+get_base <- function(api, keyword){
+  base <- "https://newsapi.org/v2/everything?"
+  domain <- "domains=elmundo.es"
+  query <- paste("q=", keyword, sep="")
+  
+  url <- paste(base, domain, sep = "")
+  url <- paste(url, query, sep="&")
+  url <- paste(url, api, sep="&apiKey=")
+  url <- paste(url, "100", sep="&pageSize=")
+  
+  return(url)
+  
+}
+
+get_base("03c2de1a4d92413f984dd51bf0f98b64", "messi")
+```
+
+Function to get all the articles returned for a given keyword
+```{r}
+get_article_keyword <- function(api, keyword){
+  url <- get_base(api, keyword)
+  
+  df <- httr::GET(url=url)
+  df <- jsonlite::fromJSON(rawToChar(df$content))
+  articles <- df$articles
+  
+  articles <- articles$content
+  
+  return(articles)
+}
+
+head(get_article_keyword("03c2de1a4d92413f984dd51bf0f98b64", "messi"))
+```
+
+Function to get all the articles for a given keyword on a given date
+```{r}
+get_word_dates <- function(api, keyword, date){
+  url <- get_base(api, keyword)
+  url <- paste(url, date, sep="&from=")
+  url <- paste(url, date, sep="&to=")
+  
+  df <- httr::GET(url=url)
+  df <- jsonlite::fromJSON(rawToChar(df$content))
+  
+  articles <- df$articles
+  articles <- articles$content
+  return(articles)
+}
+
+head(get_word_dates("03c2de1a4d92413f984dd51bf0f98b64", "trump", "2018-11-29"))
+```
+
+Function that returns the number of articles written on a given topic 
+```{r}
+get_narticles <- function(api, keyword){
+  url <- get_base(api, keyword)
+  
+  df <- httr::GET(url=url)
+  df <- jsonlite::fromJSON(rawToChar(df$content))
+  
+  nresults <- df$totalResults
+  return(nresults)
+}
+
+get_narticles("03c2de1a4d92413f984dd51bf0f98b64", "trump")
+```
+
+Function that gives you all the articles written on a given day 
+```{r}
+get_articles_dates <- function(api, date){
+  base <- "https://newsapi.org/v2/everything?"
+  domain <- "domains=elmundo.es"
+  
+  url <- paste(base, domain, sep = "")
+  url <- paste(url, date, sep="&from=")
+  url <- paste(url, date, sep="&to=")
+  url <- paste(url, api, sep="&apiKey=")
+  url <- paste(url, "100", sep="&pageSize=")
+  
+  df <- httr::GET(url=url)
+  df <- jsonlite::fromJSON(rawToChar(df$content))
+  
+  articles <- df$articles
+  articles <- articles$content
+  return(articles)
+}
+
+head(get_articles_dates("03c2de1a4d92413f984dd51bf0f98b64", "2018-11-29"))
+```
+Function for all the headlines returned for a given search word
+```{r}
+get_headline_keyword <- function(api, keyword){
+  url <- get_base(api, keyword)
+  
+  df <- httr::GET(url=url)
+  df <- jsonlite::fromJSON(rawToChar(df$content))
+  articles <- df$articles
+  
+  articles <- articles$title
+  
+  return(articles)
+}
+
+head(get_headline_keyword("03c2de1a4d92413f984dd51bf0f98b64", "messi"))
+```
+
+Function for all of the headlines on a given date 
+```{r}
+get_headlines_dates <- function(api, date){
+  base <- "https://newsapi.org/v2/everything?"
+  domain <- "domains=elmundo.es"
+  
+  url <- paste(base, domain, sep = "")
+  url <- paste(url, date, sep="&from=")
+  url <- paste(url, date, sep="&to=")
+  url <- paste(url, api, sep="&apiKey=")
+  url <- paste(url, "100", sep="&pageSize=")
+  
+  df <- httr::GET(url=url)
+  df <- jsonlite::fromJSON(rawToChar(df$content))
+  
+  articles <- df$articles
+  articles <- articles$title
+  return(articles)
+}
+
+head(get_headlines_dates("03c2de1a4d92413f984dd51bf0f98b64", "2018-11-29"))
+```
+
+#Google Translate Functions
+##Actual translation function 
+###Spanish to English
+```{r}
+get_translated <- function(text, api){
+
+source <- "es"
+target <- "en"
+news <- text
+
+body <- paste("{",
+              "'q':'", news, "',", 
+              "'source':'", source, "',",
+              "'target':'", target, "',",
+              "'format':'text',",  
+              "}", sep="")
+
+base <- "https://translation.googleapis.com/language/translate/v2?key="
+url <- paste(base, api, sep="")
+
+x <- httr::POST(url, body = body)
+x <- jsonlite::fromJSON(rawToChar(x$content))
+
+out <- x$data$translations$translatedText
+
+return(out)
+}
+
+text <- get_article_keyword("03c2de1a4d92413f984dd51bf0f98b64", "trump")
+text <- text[10]
+get_translated(text, "AIzaSyDXaGrD6yGkK3kRnYPp_4s-dQ2DkLnCXlE")
+```
+
+##Text to speech function
+```{r}
+get_spoken <- function(text, api){
+  text <- paste(text, collapse=" ")
+  
+  input <- paste("'input':{'text':'", text, "'}", sep="")
+  voice <- "'voice':{'languageCode':'nl-NL','name':'nl-NL-Standard-A','ssmlGender':'FEMALE'}"
+  output <- "'audioConfig':{'audioEncoding':'MP3'}"
+  
+  s_body <- paste("{", input, ",", voice, ",", output, "}", sep="")
+  
+  base_url <- "https://texttospeech.googleapis.com/v1/text:synthesize?key="
+  url <- paste(base_url, api, sep="")
+  
+  x <- httr::POST(url, body = s_body)
+  x <- jsonlite::fromJSON(rawToChar(x$content))
+  x <- x$audioContent
+  
+  shell("del translated.txt")
+  con <- file("translated.txt", "w")
+  writeLines(x, con=con)
+  close(con)
+  
+  shell("del trans_audio.mp3")
+  shell("certutil -decode translated.txt trans_audio.mp3")
+  shell("start trans_audio.mp3")
+}
+```
