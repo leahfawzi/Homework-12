@@ -1,0 +1,162 @@
+---
+title: "新华网－XinHua.net"
+author: "Samuel Joslin"
+date: "12/1/2018"
+header-includes:
+  - \usepackage{ctex}
+output: 
+  pdf_document:
+    latex_engine: xelatex
+---
+---
+
+**新华网 or XinHua.net is an popular news outlet in China. My goal is to create a number of functions to allow users to interact with headlines on XinHua.net**
+
+
+In order to user all the functions, users will need to aquire a unique XinHua.net API Key and a GoogleCloud API key. Below I include mine for demonstration purposes.
+
+```{r, message=FALSE}
+library(httr, quietly = T)
+library(dplyr, quietly = T)
+library(lubridate, quietly = T)
+library(base64, quietly = T)
+
+samAPIkey <- "8665b12062004f058c454ea7c4b2bd9a"
+googleAPI_key <- "AIzaSyCOrcUDCTzVLfCgTekyFYhT_S4hJthGyak"
+
+```
+
+
+The user can defiine their API as a global vairable to make using the functions easier. This way, the user's will simply need to input the variable name into the functions, rather than enter their entire key everytime. 
+
+
+
+**getHeadlines_TimeSpan**
+
+The getHeadlines_TimeSpan function takes a beginning date and end date. It returns all the headlines posted by XinHua in between those dates. Its important to note date1 must be earlier than date2. 
+
+```{r}
+getHeadlines_TimeSpan <- function(date1,date2, APIkey){
+  base <- "https://newsapi.org/v2/everything?"
+  sources <- "xinhua-net"
+  url1 <- paste(base,"sources=",sources,"&","from=",date1,"&","to=",date2,"&sortBy=popularity&","apiKey=",
+                APIkey, sep = "")
+
+  x <- httr::GET(url=url1)
+  x <- jsonlite::fromJSON(rawToChar(x$content))
+  return(x$articles$title)
+}
+```
+
+**getHeadlines_TimeSpan-- Example**
+```{r}
+head(getHeadlines_TimeSpan(2018-11-19,2018-11-20, samAPIkey))
+```
+
+
+
+**getHeadlines_keyword**
+
+The getHeadlines_keyword function accepts a keyword as a character vector to search by and returns the headlines regarding the input word.
+
+```{r}
+getHeadlines_keyword <- function(keyword, APIkey){
+  base <- "https://newsapi.org/v2/everything?"
+  sources <- "xinhua-net"
+  url1 <- paste(base,"sources=",sources,"&","q=",keyword,
+                "&sortBy=popularity&","apiKey=",
+                APIkey, sep = "")
+  x <- httr::GET(url=url1)
+  x <- jsonlite::fromJSON(rawToChar(x$content))
+  return(x$articles$title)
+}
+```
+
+
+**getHeadlines_keyword-- Example**
+
+
+```{r}
+head(getHeadlines_keyword("美国",samAPIkey))
+```
+
+
+**Chinese to English Headline Translation**
+
+This function takes a vector of chinese characters and returns a data.frame where the first column is the input and the second column is the translation. 
+
+
+```{r}
+chinese_to_en_translator <- function(headlines,gAPI_key){
+  nh <- length(headlines)
+  en_trans <- rep(NA,nh)
+  for (i in 1:nh){
+    ch <- headlines[i]
+    source <- "zh"
+    target <- "en"
+    body <- paste("{",
+                  "'q':'", ch, "',",
+                  "'source':'", source, "',",
+                  "'target':'", target, "',",
+                  "'format':'text'",  
+                  "}", sep="")
+    
+    base <- "https://translation.googleapis.com/language/translate/v2?key="
+    url <- paste(base, gAPI_key, sep="")
+    
+    x <- httr::POST(url, body = body)
+    x <- jsonlite::fromJSON(rawToChar(x$content))
+    en_trans[i] <- x$data$translations$translatedText
+    
+  }
+  return(data.frame(Original = headlines, Translation = en_trans))
+}
+
+
+```
+
+**Chinese to English Headline Translation-- Example**
+
+```{r,fig.align="left"}
+chinese_headlines <- head(getHeadlines_keyword("美国",samAPIkey))
+print(chinese_to_en_translator(chinese_headlines,googleAPI_key), right =F)
+```
+
+
+
+
+**Text to Speech**
+
+The text_to_speech function takes a character string and dictates it. 
+
+```{r}
+text_to_speech  <-function(text, gAPIkey){
+
+  text  <-paste(text,collapse="  ")
+  text  <-gsub("'","",  text)
+  
+  input  <-paste("'input':{'text':'",  text,"'}",sep="")
+  voice  <-"'voice':{'languageCode':'en-GB','name':'en-GB-Standard-C','ssmlGender':'FEMALE'}"
+  output  <-"'audioConfig':{'audioEncoding':'MP3'}"
+  
+  s_body  <-paste("{",  input,",",  voice,",",  output,"}",sep="")
+  base_url <- "https://texttospeech.googleapis.com/v1/text:synthesize?key="
+  base_url  <-url  <-paste(base_url,gAPIkey,sep="")
+  
+  x  <-httr::POST(url,body  =s_body)
+  x  <-jsonlite::fromJSON(rawToChar(x$content))
+
+  Sys.setenv(output_string=x$audioContent)
+  
+  system("echo $output_string > sound_out.txt")
+  system("base64 --decode sound_out.txt > sound_out.mp3")
+  system("afplay sound_out.mp3")
+}
+```
+
+**text_to_speech-- example**
+
+```{r}
+chinese_headlines <- head(getHeadlines_keyword("美国",samAPIkey))
+text_to_speech(chinese_headlines[1],googleAPI_key)
+```
