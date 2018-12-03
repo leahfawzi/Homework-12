@@ -1,3 +1,4 @@
+# By: Ziyun Wang
 #### MATH110 HW 12 ####
 library(httr)
 
