@@ -1,0 +1,158 @@
+---
+title: "XinhuaAPI"
+author: "Jackie Liang"
+date: "December 2, 2018"
+output: word_document
+---
+
+#Problem Set 12
+
+Pulling titles from Xinhua API
+May have encoding issues due to differences in local settings in R, Rmarkdown, Google/Xinhua API and/or JSON formatting
+```{r}
+library(httr)
+library(jsonlite)
+
+Sys.setlocale("LC_ALL","Chinese")
+sessionInfo()
+#Type in Global API-key
+api_key <- "5d642184b7ec43dbbf72e8b4dce49304"
+
+
+base <- "https://newsapi.org/v2/everything?sources=xinhua-net&apiKey="
+url <- paste(base, api_key, sep="")
+news <- httr::GET(url=url)
+news <- jsonlite::fromJSON(rawToChar(news$content))
+title <- news$articles$title
+title
+
+```
+
+
+```{r}
+API_key <- "AIzaSyDMDSsfBjainQ3_ZDU1mBllY_uPMSo80WM"
+Sys.setlocale(category = "LC_CTYPE", locale = "Chinese")
+
+#Encoding issues between json, R, google I believe -- had to manually paste a title into the text
+#Translating Chinese to English
+text <- "璐濆畞210涓斂鍏氬甯冨悎骞舵垚绔嬫敮鎸佹€荤粺濉旈殕鐨勬柊鏀垮厷 - 鏂板崕缃<91>"
+source <- "zh-CN"
+target <- "en"
+body <- paste("{",
+              "'q':'", text, "',", 
+              "'source':'", source, "',",
+              "'target':'", target, "',",
+              "'format':'text',",  
+              "}", sep="")
+
+base1 <- "https://translation.googleapis.com/language/translate/v2?key="
+url1 <- paste(base1, API_key, sep="")
+
+x1 <- httr::POST(url1, body = body)
+x1 <- jsonlite::fromJSON(rawToChar(x1$content))
+out <- x1$data$translations$translatedText
+out
+
+text <- paste(out, collapse=" ")
+text <- gsub("'", "", text)
+input <- paste("'input':{'text':'", text, "'}", sep="")
+voice <- "'voice':{'languageCode':'en-AU','name':'en-AU-Standard-A','ssmlGender':'FEMALE'}"
+output <- "'audioConfig':{'audioEncoding':'MP3'}"
+s_body <- paste("{", input, ",", voice, ",", output, "}", sep="")
+
+base_url <- "https://texttospeech.googleapis.com/v1/text:synthesize?key="
+url <- paste(base_url, API_key, sep="")
+
+x <- httr::POST(url, body = s_body)
+x <- jsonlite::fromJSON(rawToChar(x$content))
+
+
+Sys.setenv(output_string = x$audioContent)
+audio <- x$audioContent
+con <- file("sound_out.txt", "w")
+writeLines(audio, con=con)
+close(con)
+#commented out to avoid Windows status error 80
+#shell("certutil -decode sound_out.txt sound_out.mp3")
+#commented out to avoid windows status error 32, output is saved and can be reviewed in Jackie file
+#shell("start sound_out.mp3")
+
+```
+
+###Xinhua API
+```{r}
+#Recent Headlines, 20 results per page, sorted by published 
+
+xinhua <- function(page){
+  base <- "https://newsapi.org/v2/everything?sources=xinhua-net&page="
+  page <- page
+  and <- "&apiKey="
+  url <- paste(base, page, and, api_key, sep="")
+  news <- httr::GET(url=url)
+  news <- jsonlite::fromJSON(rawToChar(news$content))
+  return(news$articles$title)
+}
+
+
+#Gives top results from the Xinhua site
+
+top_results <- function(){
+  base <- "https://newsapi.org/v2/top-headlines?sources=xinhua-net&apiKey="
+  api <- api_key
+  url <- paste(base, api_key, sep = "")
+  topnews <- httr::GET(url=url)
+  topnews <-jsonlite::fromJSON(rawToChar(topnews$content))
+  x <- topnews$articles$title
+  return(x)
+}
+
+#Searches xinhua by word, sorted by relevancy
+
+query <- function(query){
+  base <- "https://newsapi.org/v2/everything?q="
+  search <- query
+  sort <- "&sortBy=relevancy"
+  sources <- "&sources=xinhua-net&apiKey="
+  url <- paste(base, search, sort, sources, api_key, sep="")
+  news <- httr::GET(url=url)
+  news <- jsonlite::fromJSON(rawToChar(news$content))
+  return(news$articles)
+}
+
+#Articles filtered by a period of time
+#Format Y-M-D: XXXX-XX-XX
+date <- function(from_ymd, to_ymd){
+  base <- "https://newsapi.org/v2/everything?from="
+  from <- from_ymd
+  and <- "&to="
+  to <- to_ymd
+  sources <- "&sources=xinhua-net&apiKey="
+  url <- paste(base, from, and, to, sources, api_key, sep="")
+  news <- httr::GET(url=url)
+  news <- jsonlite::fromJSON(rawToChar(news$content))
+  return(news$articles)
+  
+}
+
+
+#Search by word, filtered by a period of time
+query_by_date <- function(query, from_ymd, to_ymd){
+  base <- "https://newsapi.org/v2/everything?q="
+  search <- query
+  and <-"&from="
+  from <- from_ymd
+  and2 <- "&to="
+  to <- to_ymd
+  sources <- "&sources=xinhua-net&apiKey="
+  url <- paste(base, search, and, from, and2, to, sources, api_key, sep="")
+  news <- httr::GET(url=url)
+  news <- jsonlite::fromJSON(rawToChar(news$content))
+  return(news$articles)
+}
+head(xinhua(1))
+head(xinhua(2))
+head(query("Xinhua"))
+head(date(2018-12-01, 2018-12-12))
+head(top_results())
+head(query_by_date("Xinhua", 2018-12-01, 2018-12-12))
+```
