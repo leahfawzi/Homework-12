@@ -1,0 +1,91 @@
+#Set up
+library(httr)  
+library(jsonlite)
+
+google_api <- "AIzaSyBo4XcR1L7zGovVabrycKrLpwzLenEIKqY"
+le_monde_api <- "e1ae984cad894cd9844f61563c7d4a29" 
+
+#Top 10 Headlines
+get_top10_lemonde_headlines <- function(le_monde_api, date){ 
+  base <- "https://newsapi.org/v2/top-headlines?sources=le-monde"
+  le_monde_url <- paste(base, "&from=" , date, "&to=" , date,
+                        "&apiKey=", le_monde_api, sep = "")
+  x <- GET(url=le_monde_url) 
+  x <- fromJSON(rawToChar(x$content))
+  headlines <- x$articles$title
+  return(headlines)
+  }
+
+h <- get_top10_lemonde_headlines(le_monde_api, 2018-10-08) 
+h
+
+#Article Query Function
+get_lemonde_articles <- function(le_monde_api, keyword, from_date, to_date){ 
+  base <- "https://newsapi.org/v2/everything?q="  
+  url <- paste(base, keyword, "&from=", from_date, "&to=", to_date,
+               "&domains=lemonde.fr&pageSize=100&apiKey=", le_monde_api, sep = "") 
+  x <- GET(url=url) 
+  x <- fromJSON(rawToChar(x$content))  
+  articles <- as.data.frame(x$articles)  
+  return(articles)
+} 
+
+f <- get_lemonde_articles(le_monde_api, "Sarkozy", 2010-06-01, 2018-07-01) 
+
+descriptions <- f$description 
+
+#Translate Text Function
+translate_text <- function(text, google_api, source_language, target_language){ 
+  body <- paste("{",
+                "'q':'", text, "',", 
+                "'source':'", source_language, "',",
+                "'target':'", target_language, "',",
+                "'format':'text',",  
+                "}", sep="")
+  
+  base <- "https://translation.googleapis.com/language/translate/v2?key="
+  url <- paste(base, google_api, sep="") 
+  x <- POST(url, body = body) 
+
+  x <- fromJSON(rawToChar(x$content))
+  out <- x$data$translations$translatedText
+  return(out)
+} 
+
+translated_text <- rep(NA, length(descriptions))
+for (i in 1:length(descriptions)){  
+  article <- descriptions[i]
+  t <- translate_text(article, google_api, "fr", "en") 
+  translated_text[i] <- t 
+} 
+
+translated_text 
+
+#Text-to-Speech Function
+text_to_speech <- function(text){
+to_speak <- paste(text, collapse=" ") 
+to_speak <- gsub("'", "", text) 
+
+input <- paste("'input':{'text':'", to_speak, "'}", sep="")
+voice <- "'voice':{'languageCode':'en-GB','name':'en-GB-Standard-A','ssmlGender':'FEMALE'}"
+output <- "'audioConfig':{'audioEncoding':'MP3'}"
+
+s_body <- paste("{", input, ",", voice, ",", output, "}", sep="")
+
+base_url <- "https://texttospeech.googleapis.com/v1/text:synthesize?key="
+url <- paste(base_url, google_api, sep="")
+
+x <- POST(url, body = s_body) 
+x <- fromJSON(rawToChar(x$content)) 
+Sys.setenv(output_string=x$audioContent)
+system("echo $output_string > sound_out.txt") 
+
+system("base64 --decode sound_out.txt > sound_out.mp3")
+system("afplay sound_out.mp3")
+} 
+
+for (i in 1:length(translated_text)){ 
+  speak <- translated_text[i]
+  r <- text_to_speech(speak)
+  r 
+}
